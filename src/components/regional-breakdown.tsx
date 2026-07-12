@@ -44,7 +44,7 @@ export default function RegionalBreakdown({ treemapData }: RegionalBreakdownProp
   }
 
   return (
-    <div className="glass-card p-5 flex flex-col h-full min-h-[500px]">
+    <div className="glass-card p-5 flex flex-col h-full min-h-[350px] sm:min-h-[500px]">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-foreground">
           Regional Allocation
@@ -54,16 +54,16 @@ export default function RegionalBreakdown({ treemapData }: RegionalBreakdownProp
         </p>
       </div>
 
-      <div className="flex flex-1 gap-6 items-center">
-        <div className="h-[400px] flex-shrink-0" style={{ width: "55%" }}>
+      <div className="flex flex-1 flex-col lg:flex-row gap-4 lg:gap-6 items-center">
+        <div className="w-full lg:w-[55%] h-[250px] sm:h-[350px] lg:h-[400px] flex-shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={data}
                 cx="50%"
                 cy="50%"
-                innerRadius={80}
-                outerRadius={145}
+                innerRadius={60}
+                outerRadius={100}
                 paddingAngle={3}
                 dataKey="value"
               >
@@ -76,16 +76,16 @@ export default function RegionalBreakdown({ treemapData }: RegionalBreakdownProp
           </ResponsiveContainer>
         </div>
 
-        <div className="flex-1 space-y-3">
+        <div className="w-full lg:flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-2 lg:space-y-3">
           {data.map((d) => {
             const pct = ((d.value / total) * 100).toFixed(1)
             return (
-              <div key={d.name} className="flex items-center justify-between text-sm text-muted-foreground">
-                <span className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 rounded-full" style={{ background: d.fill }} />
-                  {d.name}
+              <div key={d.name} className="flex items-center justify-between text-xs sm:text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5 lg:gap-2 truncate">
+                  <span className="inline-block h-2.5 w-2.5 lg:h-3 lg:w-3 rounded-full shrink-0" style={{ background: d.fill }} />
+                  <span className="truncate">{d.name}</span>
                 </span>
-                <span className="font-medium text-foreground">{pct}%</span>
+                <span className="font-medium text-foreground shrink-0 ml-1">{pct}%</span>
               </div>
             )
           })}

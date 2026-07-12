@@ -76,7 +76,7 @@ export default function FaacVsIgrChart({ data }: { data: FaacVsIgrDataPoint[] })
         </button>
       </div>
 
-      <div className="flex-1 min-h-[320px] w-full">
+      <div className="flex-1 min-h-[240px] sm:min-h-[320px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           {mode === "bar" ? (
             <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>

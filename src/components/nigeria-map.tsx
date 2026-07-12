@@ -34,7 +34,7 @@ export default function NigeriaMap({ data, selectedState, onStateClick }: Nigeri
   const dataMap = new Map(data.map((d) => [d.state.toLowerCase(), d]))
 
   return (
-    <div className="w-full h-full min-h-[500px] flex items-center justify-center">
+    <div className="w-full h-full min-h-[250px] sm:min-h-[500px] flex items-center justify-center">
       <ComposableMap
         projection="geoMercator"
         projectionConfig={{

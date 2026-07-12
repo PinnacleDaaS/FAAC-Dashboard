@@ -118,7 +118,7 @@ export default function DataExplorer({ data, year, region, month }: DataExplorer
         </div>
       </div>
 
-      <div className="flex-1 overflow-x-auto min-h-[300px]">
+      <div className="flex-1 overflow-x-auto min-h-[240px] sm:min-h-[300px]">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border text-muted-foreground">

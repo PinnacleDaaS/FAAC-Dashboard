@@ -87,7 +87,7 @@ export default function ClientDashboard({
 
   return (
     <>
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
             FAAC Dashboard
@@ -162,7 +162,7 @@ export default function ClientDashboard({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        <div className="glass-card p-4 sm:p-6 w-full min-h-[500px]">
+        <div className="glass-card p-4 sm:p-6 w-full min-h-[350px] sm:min-h-[500px]">
           <div className="mb-3">
             <h3 className="text-sm font-semibold text-foreground">Nigeria State Dependency Map</h3>
             <p className="text-xs text-muted-foreground">Dependency ratio by state, colored by severity</p>
