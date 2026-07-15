@@ -1,7 +1,15 @@
 import { cache } from "react"
 import { supabase } from "./supabase"
-import type { DashboardSummary, FaacVsIgrDataPoint, StateComposition, KpiData, StateDeepDiveData, MonthlyData } from "@/types"
-import { getZoneForState, getDependencyColor } from "@/types"
+import type { DashboardSummary, FaacVsIgrDataPoint, StateComposition, KpiData, StateDeepDiveData, MonthlyData, FaacAllocation } from "@/types"
+import { getZoneForState, getDependencyColor, GEOPOLITICAL_ZONES } from "@/types"
+
+function filterByRegion(results: DashboardSummary[], region?: string | null): DashboardSummary[] {
+  if (!region || region === "All") return results
+  const zoneStates = Object.entries(GEOPOLITICAL_ZONES).find(([key]) => key === region)?.[1] || []
+  return results.filter((r) =>
+    zoneStates.some((s) => s.toLowerCase() === r.state.toLowerCase())
+  )
+}
 
 export const fetchDashboardSummary = cache(
   async (year?: number | null, region?: string | null): Promise<DashboardSummary[]> => {
@@ -15,23 +23,48 @@ export const fetchDashboardSummary = cache(
 
     if (error) throw new Error(`Failed to fetch dashboard summary: ${error.message}`)
 
-    let results = data as DashboardSummary[]
-
-    results = results.map((r) => ({
+    let results = (data as DashboardSummary[]).map((r) => ({
       ...r,
       state: r.state === "Nassarawa" ? "Nasarawa" : r.state,
     }))
 
-    if (region && region !== "All") {
-      const zoneStates = Object.entries(
-        (await import("@/types")).GEOPOLITICAL_ZONES
-      ).find(([key]) => key === region)?.[1] || []
-      results = results.filter((r) =>
-        zoneStates.some((s) => s.toLowerCase() === r.state.toLowerCase())
-      )
+    return filterByRegion(results, region)
+  }
+)
+
+export const fetchMonthlySummary = cache(
+  async (year?: number | null, month?: number | null, region?: string | null): Promise<DashboardSummary[]> => {
+    let query = supabase.from("faac_allocations").select("*")
+
+    if (year) {
+      query = query.eq("year", year)
+    }
+    if (month) {
+      query = query.eq("month", month)
     }
 
-    return results
+    const { data, error } = await query
+    if (error) throw new Error(`Failed to fetch monthly summary: ${error.message}`)
+
+    const grouped = new Map<string, { year: number; state: string; total_net: number; total_gross: number }>()
+    for (const row of (data as FaacAllocation[])) {
+      const key = `${row.year}-${row.state}`
+      const existing = grouped.get(key) || { year: row.year, state: row.state, total_net: 0, total_gross: 0 }
+      existing.total_net += row.net
+      existing.total_gross += row.gross
+      grouped.set(key, existing)
+    }
+
+    let results = Array.from(grouped.values()).map((r) => ({
+      year: r.year,
+      state: r.state === "Nassarawa" ? "Nasarawa" : r.state,
+      total_net: r.total_net,
+      total_gross: r.total_gross,
+      total_igr: 0,
+      dependency_ratio: 0,
+    }))
+
+    return filterByRegion(results, region)
   }
 )
 
@@ -42,8 +75,11 @@ function formatNaira(value: number): string {
   return `₦${value.toLocaleString()}`
 }
 
-export async function fetchKpiData(year?: number | null, region?: string | null): Promise<KpiData> {
-  const data = await fetchDashboardSummary(year, region)
+export async function fetchKpiData(year?: number | null, month?: number | null, region?: string | null): Promise<KpiData> {
+  const isMonthly = !!month
+  const data = isMonthly
+    ? await fetchMonthlySummary(year, month, region)
+    : await fetchDashboardSummary(year, region)
 
   if (data.length === 0) {
     return {
@@ -52,16 +88,28 @@ export async function fetchKpiData(year?: number | null, region?: string | null)
       avgDependencyRatio: 0,
       yoyChange: null,
       stateCount: 0,
+      hasIgrData: false,
     }
   }
 
   const totalNetAllocation = data.reduce((sum, row) => sum + row.total_net, 0)
-  const totalIgr = data.reduce((sum, row) => sum + row.total_igr, 0)
-  const avgDependencyRatio = data.reduce((sum, row) => sum + row.dependency_ratio, 0) / data.length
+  const hasIgrData = !isMonthly && data.some((row) => row.total_igr > 0)
+  const totalIgr = isMonthly ? 0 : data.reduce((sum, row) => sum + row.total_igr, 0)
+  const avgDependencyRatio = isMonthly ? 0 : (
+    hasIgrData
+      ? data.reduce((sum, row) => sum + row.dependency_ratio, 0) / data.length
+      : 0
+  )
   const stateCount = new Set(data.map((r) => r.state)).size
 
   let yoyChange: number | null = null
-  if (year) {
+  if (year && month) {
+    const prevData = await fetchMonthlySummary(year - 1, month, region)
+    const prevTotal = prevData.reduce((sum, row) => sum + row.total_net, 0)
+    if (prevTotal > 0) {
+      yoyChange = ((totalNetAllocation - prevTotal) / prevTotal) * 100
+    }
+  } else if (year && !month) {
     const prevYear = year - 1
     const prevData = await fetchDashboardSummary(prevYear, region)
     const prevTotal = prevData.reduce((sum, row) => sum + row.total_net, 0)
@@ -69,15 +117,19 @@ export async function fetchKpiData(year?: number | null, region?: string | null)
       yoyChange = ((totalNetAllocation - prevTotal) / prevTotal) * 100
     }
   } else {
-    const allData = await fetchDashboardSummary()
     const yearlyTotals = new Map<number, number>()
-    for (const row of allData) {
+    for (const row of data) {
       yearlyTotals.set(row.year, (yearlyTotals.get(row.year) || 0) + row.total_net)
     }
     const sortedYears = Array.from(yearlyTotals.entries()).sort((a, b) => b[0] - a[0])
-    if (sortedYears.length >= 2) {
-      const [, latestTotal] = sortedYears[0]
-      const [, prevTotal] = sortedYears[1]
+    const completeYears = sortedYears.filter(([y]) => {
+      const yearStates = data.filter((r) => r.year === y)
+      const statesWithFaac = new Set(yearStates.map((r) => r.state)).size
+      return statesWithFaac >= 30
+    })
+    if (completeYears.length >= 2) {
+      const [, latestTotal] = completeYears[0]
+      const [, prevTotal] = completeYears[1]
       yoyChange = ((latestTotal - prevTotal) / prevTotal) * 100
     }
   }
@@ -88,14 +140,19 @@ export async function fetchKpiData(year?: number | null, region?: string | null)
     avgDependencyRatio,
     yoyChange,
     stateCount,
+    hasIgrData,
   }
 }
 
 export async function fetchFaacVsIgrTrend(
   year?: number | null,
+  month?: number | null,
   region?: string | null
 ): Promise<FaacVsIgrDataPoint[]> {
-  const data = await fetchDashboardSummary(year, region)
+  const data = month
+    ? await fetchMonthlySummary(null, month, region)
+    : await fetchDashboardSummary(year, region)
+
   const grouped = new Map<number, { faac: number; igr: number; hasIgr: boolean }>()
 
   for (const row of data) {
@@ -117,18 +174,28 @@ export async function fetchFaacVsIgrTrend(
 
 export async function fetchStateComposition(
   year?: number | null,
+  month?: number | null,
   region?: string | null
 ): Promise<StateComposition[]> {
-  let data = await fetchDashboardSummary(year, region)
+  const isMonthly = !!month
+  let data = isMonthly
+    ? await fetchMonthlySummary(year, month, region)
+    : await fetchDashboardSummary(year, region)
 
-  if (year) {
-    data = data.filter((d) => d.year === year)
+  if (isMonthly) {
+    if (!year) {
+      data = data.filter((d) => d.year === Math.max(...data.map((r) => r.year)))
+    }
   } else {
-    const yearsWithIgr = data.filter((d) => d.total_igr > 0).map((d) => d.year)
-    const latestYear = yearsWithIgr.length > 0
-      ? Math.max(...yearsWithIgr)
-      : Math.max(...data.map((d) => d.year))
-    data = data.filter((d) => d.year === latestYear)
+    if (year) {
+      data = data.filter((d) => d.year === year)
+    } else {
+      const yearsWithIgr = data.filter((d) => d.total_igr > 0).map((d) => d.year)
+      const latestYear = yearsWithIgr.length > 0
+        ? Math.max(...yearsWithIgr)
+        : Math.max(...data.map((d) => d.year))
+      data = data.filter((d) => d.year === latestYear)
+    }
   }
 
   return data.map((row) => ({
@@ -140,8 +207,11 @@ export async function fetchStateComposition(
 }
 
 export const fetchStateDeepDive = cache(
-  async (state: string, year?: number | null): Promise<StateDeepDiveData> => {
-    const summary = await fetchDashboardSummary(year)
+  async (state: string, year?: number | null, month?: number | null): Promise<StateDeepDiveData> => {
+    const isMonthly = !!month
+    const summary = isMonthly
+      ? await fetchMonthlySummary(year, month)
+      : await fetchDashboardSummary(year)
 
     const stateSummary = summary.find(
       (s) => s.state.toLowerCase() === state.toLowerCase()
@@ -168,6 +238,9 @@ export const fetchStateDeepDive = cache(
     if (year) {
       query = query.eq("year", year)
     }
+    if (month) {
+      query = query.eq("month", month)
+    }
 
     const { data: monthlyData, error } = await query
 
@@ -177,8 +250,8 @@ export const fetchStateDeepDive = cache(
       state: stateSummary.state,
       totalNet: stateSummary.total_net,
       totalGross: stateSummary.total_gross,
-      totalIgr: stateSummary.total_igr,
-      dependencyRatio: stateSummary.dependency_ratio,
+      totalIgr: isMonthly ? 0 : stateSummary.total_igr,
+      dependencyRatio: isMonthly ? 0 : stateSummary.dependency_ratio,
       monthlyData: (monthlyData || []) as MonthlyData[],
     }
   }
@@ -203,15 +276,19 @@ export async function fetchLatestDataDate(): Promise<string> {
 
 export async function fetchMapData(
   year?: number | null,
+  month?: number | null,
   region?: string | null
 ): Promise<{ state: string; totalNet: number; dependencyRatio: number }[]> {
-  const data = await fetchDashboardSummary(year, region)
+  const isMonthly = !!month
+  const data = isMonthly
+    ? await fetchMonthlySummary(year, month, region)
+    : await fetchDashboardSummary(year, region)
 
   if (year) {
     return data.map((d) => ({
       state: d.state,
       totalNet: d.total_net,
-      dependencyRatio: d.dependency_ratio,
+      dependencyRatio: isMonthly ? 0 : d.dependency_ratio,
     }))
   }
 
@@ -232,6 +309,6 @@ export async function fetchMapData(
   return Array.from(stateLatest.values()).map((d) => ({
     state: d.state,
     totalNet: d.total_net,
-    dependencyRatio: d.dependency_ratio,
+    dependencyRatio: isMonthly ? 0 : d.dependency_ratio,
   }))
 }

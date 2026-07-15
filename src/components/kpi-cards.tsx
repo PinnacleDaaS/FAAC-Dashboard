@@ -59,14 +59,14 @@ export default function KpiCards({ data }: { data: KpiData }) {
     ? data.yoyChange >= 0 ? "text-green-600" : "text-red-600"
     : ""
 
-  const igrRatio = data.totalNetAllocation > 0
+  const igrRatio = data.hasIgrData && data.totalNetAllocation > 0
     ? (data.totalIgr / data.totalNetAllocation * 100).toFixed(1)
     : null
 
   const totalNetInsight = `Distributed across ${data.stateCount} state${data.stateCount > 1 ? "s" : ""} + FCT`
   const totalIgrInsight = igrRatio
     ? `Equivalent to ${igrRatio}% of total FAAC allocation`
-    : "Data pending for recent fiscal years"
+    : "IGR data not yet available for this period"
   const avgDepInsight = data.avgDependencyRatio >= 0.9
     ? "Critically high — states rely heavily on federal allocation"
     : data.avgDependencyRatio >= 0.75

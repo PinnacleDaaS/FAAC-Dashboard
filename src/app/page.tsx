@@ -35,17 +35,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const params = await searchParams
   const year = params.year ? Number(params.year) : null
   const region = params.region || null
+  const month = params.month ? Number(params.month) : null
   const clientSearchParams = {
     year: year ?? undefined,
     region: region,
-    month: params.month,
+    month: month?.toString(),
   }
 
   const [kpiData, faacVsIgrData, stackedBarData, mapData, dateLabel] = await Promise.all([
-    fetchKpiData(year, region),
-    fetchFaacVsIgrTrend(year, region),
-    fetchStateComposition(year, region),
-    fetchMapData(year, region),
+    fetchKpiData(year, month, region),
+    fetchFaacVsIgrTrend(year, month, region),
+    fetchStateComposition(year, month, region),
+    fetchMapData(year, month, region),
     fetchLatestDataDate(),
   ])
 

@@ -29,9 +29,11 @@ XLSX_PATH = (
     Path(__file__).parent.parent / "FAAC_Allocation_Aggregated_2016-2026.xlsx"
 )
 
-MONTH_NAMES = [
-    "january", "february", "march", "april", "may", "june",
-    "july", "august", "september", "october", "november", "december",
+# Abbreviated month names used across Excel sheets
+# Full names (january) are used in 2016-2021; abbreviations (jan) in 2022-2026
+MONTH_ABBR = [
+    "jan", "feb", "mar", "apr", "may", "jun",
+    "jul", "aug", "sep", "oct", "nov", "dec",
 ]
 
 
@@ -70,13 +72,24 @@ def parse_xlsx():
         if state_col is None:
             continue
 
-        # Find monthly net/gross columns
+        # Find monthly net/gross columns using abbreviation patterns
+        # (handles both full month names and abbreviated forms)
         month_cols = {}
-        for m in MONTH_NAMES:
-            net_idx = find_column(headers, m, "net")
-            gross_idx = find_column(headers, m, "gross")
+        for mi, abbr in enumerate(MONTH_ABBR, start=1):
+            net_idx = find_column(headers, abbr, "net")
+            gross_idx = find_column(headers, abbr, "gross")
+            # Fallback: if gross found but no net, try the column right after gross
+            if net_idx is None and gross_idx is not None:
+                candidate = gross_idx + 1
+                if candidate < len(headers) and headers[candidate] and "net" in str(headers[candidate]).lower():
+                    net_idx = candidate
+            # Fallback: if net found but no gross, try the column right before net
+            if gross_idx is None and net_idx is not None:
+                candidate = net_idx - 1
+                if candidate >= 0 and headers[candidate] and "gross" in str(headers[candidate]).lower():
+                    gross_idx = candidate
             if net_idx is not None or gross_idx is not None:
-                month_cols[m] = (gross_idx, net_idx)
+                month_cols[mi] = (gross_idx, net_idx)
 
         # Find IGR column (if exists)
         igr_col = find_column(headers, "total", "igr") or find_column(
@@ -106,10 +119,10 @@ def parse_xlsx():
                     pass
 
             # Monthly FAAC allocations
-            for month_idx, month_name in enumerate(MONTH_NAMES, start=1):
-                if month_name not in month_cols:
+            for month_idx in range(1, 13):
+                if month_idx not in month_cols:
                     continue
-                gross_idx, net_idx = month_cols[month_name]
+                gross_idx, net_idx = month_cols[month_idx]
 
                 gross_val = None
                 net_val = None

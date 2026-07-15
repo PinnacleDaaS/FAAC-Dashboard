@@ -36,6 +36,7 @@ export interface KpiData {
   avgDependencyRatio: number
   yoyChange: number | null
   stateCount: number
+  hasIgrData: boolean
 }
 
 export type ChartMode = "bar" | "area"
