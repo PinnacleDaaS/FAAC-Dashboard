@@ -18,20 +18,27 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 interface StateDeepDiveProps {
   state: string
   year: number | null
+  month?: number | null
   onBack: () => void
 }
 
-export default function StateDeepDive({ state, year, onBack }: StateDeepDiveProps) {
+export default function StateDeepDive({ state, year, month, onBack }: StateDeepDiveProps) {
   const [data, setData] = useState<StateDeepDiveData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
-    fetchStateDeepDive(state, year).then((result) => {
-      setData(result)
-      setLoading(false)
+    fetchStateDeepDive(state, year, month).then((result) => {
+      if (!cancelled) {
+        setData(result)
+        setLoading(false)
+      }
+    }).catch(() => {
+      if (!cancelled) setLoading(false)
     })
-  }, [state, year])
+    return () => { cancelled = true }
+  }, [state, year, month])
 
   if (loading) {
     return (
@@ -53,11 +60,15 @@ export default function StateDeepDive({ state, year, onBack }: StateDeepDiveProp
     )
   }
 
+  const years = [...new Set(data.monthlyData.map((m) => m.year))].sort()
+  const yearLabel = year ? `${year}` : years.length === 1 ? `${years[0]}` : `${years[0]} \u2013 ${years[years.length - 1]}`
   const chartData = data.monthlyData.map((m) => ({
-    month: MONTHS[m.month - 1] || `M${m.month}`,
+    label: month ? `${MONTHS[m.month - 1]} ${m.year}` : MONTHS[m.month - 1] || `M${m.month}`,
     Gross: m.gross,
     Net: m.net,
   }))
+
+  const barCount = chartData.length
 
   return (
     <div className="glass-card p-5">
@@ -74,16 +85,29 @@ export default function StateDeepDive({ state, year, onBack }: StateDeepDiveProp
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-lg bg-primary/5 p-3">
           <p className="text-xs text-muted-foreground">Total Net</p>
-          <p className="text-lg font-bold text-foreground">{formatNaira(data.totalNet)}</p>
+          <p className="text-lg font-bold text-foreground">
+            {data.totalNet > 0 ? formatNaira(data.totalNet) : "N/A"}
+          </p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+            After statutory deductions
+          </p>
         </div>
         <div className="rounded-lg bg-primary/5 p-3">
           <p className="text-xs text-muted-foreground">Total Gross</p>
-          <p className="text-lg font-bold text-foreground">{formatNaira(data.totalGross)}</p>
+          <p className="text-lg font-bold text-foreground">
+            {data.totalGross > 0 ? formatNaira(data.totalGross) : "N/A"}
+          </p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+            Before statutory deductions
+          </p>
         </div>
         <div className="rounded-lg bg-primary/5 p-3">
           <p className="text-xs text-muted-foreground">Total IGR</p>
           <p className="text-lg font-bold text-foreground">
             {data.totalIgr > 0 ? formatNaira(data.totalIgr) : "N/A"}
+          </p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+            {data.totalIgr > 0 ? "Internally generated revenue" : "Data available up to 2024"}
           </p>
         </div>
         <div className="rounded-lg bg-primary/5 p-3">
@@ -97,17 +121,21 @@ export default function StateDeepDive({ state, year, onBack }: StateDeepDiveProp
               {getDependencyLabel(data.dependencyRatio)}
             </span>
           </p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+            State reliance on federal allocation
+          </p>
         </div>
       </div>
 
       <h3 className="mb-3 text-sm font-semibold text-foreground">
         Monthly Allocation Breakdown
+        <span className="ml-2 font-normal text-muted-foreground">{yearLabel}</span>
       </h3>
-      <div className="h-64">
+      <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
             <YAxis
               tickFormatter={(v) => `₦${(v / 1e9).toFixed(1)}B`}
               tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
@@ -126,8 +154,8 @@ export default function StateDeepDive({ state, year, onBack }: StateDeepDiveProp
                 ) : null
               }
             />
-            <Bar dataKey="Gross" fill="var(--chart-1)" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="Net" fill="var(--chart-2)" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="Gross" fill="var(--chart-1)" radius={[3, 3, 0, 0]} barSize={barCount <= 1 ? 48 : 16} />
+            <Bar dataKey="Net" fill="var(--chart-2)" radius={[3, 3, 0, 0]} barSize={barCount <= 1 ? 48 : 16} />
           </BarChart>
         </ResponsiveContainer>
       </div>

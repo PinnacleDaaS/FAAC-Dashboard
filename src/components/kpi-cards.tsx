@@ -1,4 +1,4 @@
-import { CircleDollarSign, TrendingUp, Percent, ArrowUpDown } from "lucide-react"
+﻿import { Landmark, TrendingUp, Percent, ArrowUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { KpiData } from "@/types"
 
@@ -59,21 +59,22 @@ export default function KpiCards({ data }: { data: KpiData }) {
     ? data.yoyChange >= 0 ? "text-green-600" : "text-red-600"
     : ""
 
-  const igrRatio = data.hasIgrData && data.totalNetAllocation > 0
-    ? (data.totalIgr / data.totalNetAllocation * 100).toFixed(1)
-    : null
-
-  const totalNetInsight = `Distributed across ${data.stateCount} state${data.stateCount > 1 ? "s" : ""} + FCT`
-  const totalIgrInsight = igrRatio
-    ? `Equivalent to ${igrRatio}% of total FAAC allocation`
+  const stateDisplay = data.hasFct
+    ? `${data.stateCount - 1} states + FCT`
+    : `${data.stateCount} state${data.stateCount > 1 ? "s" : ""}`
+  const totalNetInsight = `Distributed across ${stateDisplay}`
+  const totalIgrInsight = data.igrRatioFormatted
+    ? `Equivalent to ${data.igrRatioFormatted}% of total FAAC allocation`
     : "IGR data not yet available for this period"
-  const avgDepInsight = data.avgDependencyRatio >= 0.9
-    ? "Critically high — states rely heavily on federal allocation"
-    : data.avgDependencyRatio >= 0.75
-      ? "High dependency — limited internal revenue generation"
-      : data.avgDependencyRatio >= 0.6
-        ? "Moderate dependency — partial fiscal autonomy"
-        : "Low dependency — strong internal revenue base"
+  const avgDepInsight = !data.hasIgrData
+    ? "IGR data not yet available to compute dependency"
+    : data.avgDependencyRatio >= 0.9
+      ? "Critically high — states rely heavily on federal allocation"
+      : data.avgDependencyRatio >= 0.75
+        ? "High dependency — limited internal revenue generation"
+        : data.avgDependencyRatio >= 0.6
+          ? "Moderate dependency — partial fiscal autonomy"
+          : "Low dependency — strong internal revenue base"
   const yoyInsight = data.yoyChange !== null
     ? `Allocation ${data.yoyChange >= 0 ? "grew" : "declined"} by ${Math.abs(data.yoyChange).toFixed(1)}% vs previous year`
     : "Select a year to compare against previous period"
@@ -85,7 +86,7 @@ export default function KpiCards({ data }: { data: KpiData }) {
         value={formatNaira(data.totalNetAllocation)}
         subtitle="Aggregated FAAC disbursements"
         insight={totalNetInsight}
-        icon={<CircleDollarSign className="h-5 w-5" />}
+        icon={<Landmark className="h-5 w-5" />}
       />
       <KpiCard
         title="Total IGR"

@@ -37,6 +37,8 @@ export interface KpiData {
   yoyChange: number | null
   stateCount: number
   hasIgrData: boolean
+  hasFct: boolean
+  igrRatioFormatted: string | null
 }
 
 export type ChartMode = "bar" | "area"

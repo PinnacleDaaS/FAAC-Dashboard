@@ -79,6 +79,7 @@ export default function ClientDashboard({
         <StateDeepDive
           state={selectedState}
           year={searchParams.year ?? null}
+          month={month ? Number(month) : null}
           onBack={() => setSelectedState(null)}
         />
       </div>
@@ -93,7 +94,7 @@ export default function ClientDashboard({
             FAAC Dashboard
           </h1>
           <p className="text-muted mt-0.5 text-xs">
-            Federation Account Allocation Committee disbursements across 36 states + FCT
+            Federation Account Allocation Committee disbursements across 36 states + FCT &middot; 2016 &ndash; present
           </p>
         </div>
 
@@ -165,7 +166,7 @@ export default function ClientDashboard({
         <div className="glass-card p-4 sm:p-6 w-full min-h-[350px] sm:min-h-[500px]">
           <div className="mb-3">
             <h3 className="text-sm font-semibold text-foreground">Nigeria State Dependency Map</h3>
-            <p className="text-xs text-muted-foreground">Dependency ratio by state, colored by severity</p>
+            <p className="text-xs text-muted-foreground">Dependency ratio by state, colored by severity — click a state to drill down</p>
           </div>
           <div className="flex-1 w-full flex items-center justify-center">
             <NigeriaMap

@@ -38,7 +38,10 @@ MONTH_ABBR = [
 
 
 def normalize_state(name: str) -> str:
-    return name.strip().title()
+    clean = name.strip()
+    if clean.lower() == "fct":
+        return "FCT"
+    return clean.title()
 
 
 def find_column(headers, *keywords):
@@ -103,7 +106,7 @@ def parse_xlsx():
             state = normalize_state(str(state_raw))
 
             # Skip summary/total rows
-            if state.lower() in ("total", "grand total", ""):
+            if any(kw in state.lower() for kw in ["total", "subtotal"]):
                 continue
 
             # IGR

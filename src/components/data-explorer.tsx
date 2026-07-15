@@ -96,7 +96,7 @@ export default function DataExplorer({ data, year, region, month }: DataExplorer
         <div>
           <h3 className="text-sm font-semibold text-foreground">Data Explorer</h3>
           <p className="text-xs text-muted-foreground">
-            {filtered.length} state{filtered.length !== 1 ? "s" : ""} · {year ? `Year: ${year}` : "All Years"} · {region || "All Regions"}
+            {filtered.length} state{filtered.length !== 1 ? "s" : ""} · {year ? `Year: ${year}` : "All Years"} · {month ? `Month: ${month}` : "All Months"} · {region || "All Regions"}
           </p>
         </div>
         <div className="flex items-center gap-2">

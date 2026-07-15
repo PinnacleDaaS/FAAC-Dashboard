@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- FAAC & IGR Dashboard — Supabase Schema
 -- Run this in Supabase SQL Editor (Dashboard > SQL Editor)
 -- ============================================================
@@ -43,15 +43,15 @@ SELECT
   f.state,
   SUM(f.net) AS total_net,
   SUM(f.gross) AS total_gross,
-  COALESCE(i.total_igr, 0) AS total_igr,
+  COALESCE(MAX(i.total_igr), 0) AS total_igr,
   CASE
-    WHEN SUM(f.net) + COALESCE(i.total_igr, 0) > 0
-    THEN SUM(f.net) / (SUM(f.net) + COALESCE(i.total_igr, 0))
+    WHEN SUM(f.net) + COALESCE(MAX(i.total_igr), 0) > 0
+    THEN SUM(f.net) / (SUM(f.net) + COALESCE(MAX(i.total_igr), 0))
     ELSE 0
   END AS dependency_ratio
 FROM faac_allocations f
 LEFT JOIN igr_data i ON f.year = i.year AND LOWER(f.state) = LOWER(i.state)
-GROUP BY f.year, f.state, i.total_igr;
+GROUP BY f.year, f.state;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dashboard_summary_year_state
   ON dashboard_summary(year, state);
@@ -61,8 +61,8 @@ CREATE OR REPLACE FUNCTION refresh_dashboard_summary()
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-AS $$
+AS 
 BEGIN
   REFRESH MATERIALIZED VIEW CONCURRENTLY dashboard_summary;
 END;
-$$;
+;

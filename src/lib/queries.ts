@@ -77,41 +77,62 @@ function formatNaira(value: number): string {
 
 export async function fetchKpiData(year?: number | null, month?: number | null, region?: string | null): Promise<KpiData> {
   const isMonthly = !!month
-  const data = isMonthly
-    ? await fetchMonthlySummary(year, month, region)
-    : await fetchDashboardSummary(year, region)
+
+  if (isMonthly) {
+    const monthlyData = await fetchMonthlySummary(year, month, region)
+    const totalNetAllocation = monthlyData.reduce((sum, row) => sum + row.total_net, 0)
+    const stateNames = new Set(monthlyData.map((r) => r.state))
+    const stateCount = stateNames.size
+    const hasFct = stateNames.has("FCT")
+
+    const yearlyData = year ? await fetchDashboardSummary(year, region) : []
+    const hasIgrData = yearlyData.some((row) => row.total_igr > 0)
+    const totalIgr = yearlyData.reduce((sum, row) => sum + row.total_igr, 0)
+    const yearlyFaacTotal = yearlyData.reduce((sum, row) => sum + row.total_net, 0)
+    const avgDependencyRatio = hasIgrData
+      ? yearlyData.reduce((sum, row) => sum + row.dependency_ratio, 0) / yearlyData.length
+      : 0
+    const igrRatioFormatted = hasIgrData && yearlyFaacTotal > 0
+      ? `${(totalIgr / yearlyFaacTotal * 100).toFixed(1)}`
+      : null
+
+    let yoyChange: number | null = null
+    if (year) {
+      const prevMonthly = await fetchMonthlySummary(year - 1, month, region)
+      const prevTotal = prevMonthly.reduce((sum, row) => sum + row.total_net, 0)
+      if (prevTotal > 0) {
+        yoyChange = ((totalNetAllocation - prevTotal) / prevTotal) * 100
+      }
+    }
+
+    return { totalNetAllocation, totalIgr, avgDependencyRatio, yoyChange, stateCount, hasIgrData, hasFct, igrRatioFormatted }
+  }
+
+  const data = await fetchDashboardSummary(year, region)
 
   if (data.length === 0) {
     return {
-      totalNetAllocation: 0,
-      totalIgr: 0,
-      avgDependencyRatio: 0,
-      yoyChange: null,
-      stateCount: 0,
-      hasIgrData: false,
+      totalNetAllocation: 0, totalIgr: 0, avgDependencyRatio: 0,
+      yoyChange: null, stateCount: 0, hasIgrData: false, hasFct: false, igrRatioFormatted: null,
     }
   }
 
   const totalNetAllocation = data.reduce((sum, row) => sum + row.total_net, 0)
-  const hasIgrData = !isMonthly && data.some((row) => row.total_igr > 0)
-  const totalIgr = isMonthly ? 0 : data.reduce((sum, row) => sum + row.total_igr, 0)
-  const avgDependencyRatio = isMonthly ? 0 : (
-    hasIgrData
-      ? data.reduce((sum, row) => sum + row.dependency_ratio, 0) / data.length
-      : 0
-  )
-  const stateCount = new Set(data.map((r) => r.state)).size
+  const stateNames = new Set(data.map((r) => r.state))
+  const stateCount = stateNames.size
+  const hasFct = stateNames.has("FCT")
+  const hasIgrData = data.some((row) => row.total_igr > 0)
+  const totalIgr = data.reduce((sum, row) => sum + row.total_igr, 0)
+  const avgDependencyRatio = hasIgrData
+    ? data.reduce((sum, row) => sum + row.dependency_ratio, 0) / data.length
+    : 0
+  const igrRatioFormatted = hasIgrData && totalNetAllocation > 0
+    ? `${(totalIgr / totalNetAllocation * 100).toFixed(1)}`
+    : null
 
   let yoyChange: number | null = null
-  if (year && month) {
-    const prevData = await fetchMonthlySummary(year - 1, month, region)
-    const prevTotal = prevData.reduce((sum, row) => sum + row.total_net, 0)
-    if (prevTotal > 0) {
-      yoyChange = ((totalNetAllocation - prevTotal) / prevTotal) * 100
-    }
-  } else if (year && !month) {
-    const prevYear = year - 1
-    const prevData = await fetchDashboardSummary(prevYear, region)
+  if (year) {
+    const prevData = await fetchDashboardSummary(year - 1, region)
     const prevTotal = prevData.reduce((sum, row) => sum + row.total_net, 0)
     if (prevTotal > 0) {
       yoyChange = ((totalNetAllocation - prevTotal) / prevTotal) * 100
@@ -134,14 +155,7 @@ export async function fetchKpiData(year?: number | null, month?: number | null, 
     }
   }
 
-  return {
-    totalNetAllocation,
-    totalIgr,
-    avgDependencyRatio,
-    yoyChange,
-    stateCount,
-    hasIgrData,
-  }
+  return { totalNetAllocation, totalIgr, avgDependencyRatio, yoyChange, stateCount, hasIgrData, hasFct, igrRatioFormatted }
 }
 
 export async function fetchFaacVsIgrTrend(
@@ -183,6 +197,20 @@ export async function fetchStateComposition(
     : await fetchDashboardSummary(year, region)
 
   if (isMonthly) {
+    const yearlyData = year ? await fetchDashboardSummary(year, region) : []
+    if (yearlyData.length > 0) {
+      const igrMap = new Map(yearlyData.map((r) => [r.state.toLowerCase(), r.total_igr]))
+      const netMap = new Map(yearlyData.map((r) => [r.state.toLowerCase(), r.total_net]))
+      data = data.map((d) => {
+        const igr = igrMap.get(d.state.toLowerCase()) || 0
+        const annualNet = netMap.get(d.state.toLowerCase()) || 0
+        return {
+          ...d,
+          total_igr: igr,
+          dependency_ratio: annualNet + igr > 0 ? annualNet / (annualNet + igr) : 0,
+        }
+      })
+    }
     if (!year) {
       data = data.filter((d) => d.year === Math.max(...data.map((r) => r.year)))
     }
@@ -213,11 +241,11 @@ export const fetchStateDeepDive = cache(
       ? await fetchMonthlySummary(year, month)
       : await fetchDashboardSummary(year)
 
-    const stateSummary = summary.find(
-      (s) => s.state.toLowerCase() === state.toLowerCase()
-    )
+    const rowsForState = summary
+      .filter((s) => s.state.toLowerCase() === state.toLowerCase())
+      .sort((a, b) => b.year - a.year)
 
-    if (!stateSummary) {
+    if (rowsForState.length === 0) {
       return {
         state,
         totalNet: 0,
@@ -228,10 +256,14 @@ export const fetchStateDeepDive = cache(
       }
     }
 
+    const stateSummary = year || month
+      ? rowsForState[0]
+      : (rowsForState.find((r) => r.total_igr > 0) || rowsForState[0])
+
     let query = supabase
       .from("faac_allocations")
       .select("year, month, gross, net")
-      .eq("state", state)
+      .ilike("state", state)
       .order("year", { ascending: true })
       .order("month", { ascending: true })
 
@@ -258,20 +290,12 @@ export const fetchStateDeepDive = cache(
 )
 
 export async function fetchLatestDataDate(): Promise<string> {
-  const { data, error } = await supabase
-    .from("faac_allocations")
-    .select("year, month")
-    .order("year", { ascending: false })
-    .order("month", { ascending: false })
-    .limit(1)
-
-  if (error || !data?.length) return "N/A"
-
+  const now = new Date()
   const months = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December",
   ]
-  return `${months[data[0].month - 1]} ${data[0].year}`
+  return `${months[now.getMonth()]} ${now.getFullYear()}`
 }
 
 export async function fetchMapData(
@@ -284,16 +308,28 @@ export async function fetchMapData(
     ? await fetchMonthlySummary(year, month, region)
     : await fetchDashboardSummary(year, region)
 
+  let enriched = data
+  if (isMonthly) {
+    const yearlyData = year ? await fetchDashboardSummary(year, region) : []
+    if (yearlyData.length > 0) {
+      const depMap = new Map(yearlyData.map((r) => [r.state.toLowerCase(), r.dependency_ratio]))
+      enriched = data.map((d) => ({
+        ...d,
+        dependency_ratio: depMap.get(d.state.toLowerCase()) ?? 0,
+      }))
+    }
+  }
+
   if (year) {
-    return data.map((d) => ({
+    return enriched.map((d) => ({
       state: d.state,
       totalNet: d.total_net,
-      dependencyRatio: isMonthly ? 0 : d.dependency_ratio,
+      dependencyRatio: d.dependency_ratio,
     }))
   }
 
   const stateLatest = new Map<string, DashboardSummary>()
-  for (const row of data) {
+  for (const row of enriched) {
     const existing = stateLatest.get(row.state)
     if (!existing) {
       stateLatest.set(row.state, row)
@@ -309,6 +345,6 @@ export async function fetchMapData(
   return Array.from(stateLatest.values()).map((d) => ({
     state: d.state,
     totalNet: d.total_net,
-    dependencyRatio: isMonthly ? 0 : d.dependency_ratio,
+    dependencyRatio: d.dependency_ratio,
   }))
 }
